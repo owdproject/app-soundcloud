@@ -23,8 +23,8 @@ owd install-app @owdproject/app-soundcloud
 ```
 soundcloud <track-url>
 soundcloud --new
-youtube --autoplay <track-url>
-youtube --no-check <track-url>
+soundcloud --autoplay <track-url>
+soundcloud --no-check <track-url>
 ```
 
 ## License
