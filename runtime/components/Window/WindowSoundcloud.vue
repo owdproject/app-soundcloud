@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { isValidSoundcloudUrl } from '../../utils/utilSoundcloud';
+import { isValidSoundcloudUrl } from '../../utils/utilSoundcloud'
 
 const props = defineProps<{
-  window?: IWindowController;
-}>();
+  window?: IWindowController
+}>()
 
 function onYoutubePlayClick() {
-  const url = window.prompt('Which track would you like to play?');
+  const url = window.prompt('Which track would you like to play?')
 
   if (url && isValidSoundcloudUrl(url)) {
     props.window.meta.url = url
@@ -23,10 +23,7 @@ function onYoutubePlayClick() {
     v-bind="$props"
   >
     <template #nav-append v-if="!props.window.meta.url">
-      <ButtonWindowNav
-        rounded
-        @click="onYoutubePlayClick"
-      >
+      <ButtonWindowNav rounded @click="onYoutubePlayClick">
         <Icon name="mdi:play" />
       </ButtonWindowNav>
     </template>
