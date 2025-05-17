@@ -6,6 +6,8 @@
   SoundCloud App for Open Web Desktop.
 </h3>
 
+<br />
+
 ## Overview
 
 This app for Open Web Desktop provides a SoundCloud player.
