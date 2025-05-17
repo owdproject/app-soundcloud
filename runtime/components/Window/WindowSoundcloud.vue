@@ -15,7 +15,13 @@ function onYoutubePlayClick() {
 </script>
 
 <template>
-  <Window v-bind="$props">
+  <WindowIframe
+    width="560"
+    height="171"
+    :src="`https://w.soundcloud.com/player/?url=${props.window.meta.url}&auto_play=${props.window.meta.autoplay}`"
+    allow="autoplay"
+    v-bind="$props"
+  >
     <template #nav-append v-if="!props.window.meta.url">
       <ButtonWindowNav
         rounded
@@ -24,14 +30,5 @@ function onYoutubePlayClick() {
         <Icon name="mdi:play" />
       </ButtonWindowNav>
     </template>
-
-    <iframe
-      width="560"
-      height="171"
-      :src="`https://w.soundcloud.com/player/?url=${props.window.meta.url}&auto_play=${props.window.meta.autoplay}`"
-      allow="autoplay"
-      referrerpolicy="strict-origin-when-cross-origin"
-      allowfullscreen
-    />
-  </Window>
+  </WindowIframe>
 </template>
