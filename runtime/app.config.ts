@@ -27,16 +27,16 @@ export default {
   },
   commands: {
     soundcloud: (app: IApplicationController, args: any) => {
-      const doNotCheckUrlValidity = args?.includes('--no-check')
-      const forceNewWindow = args?.includes('--new')
-      const soundcloudUrl = args?.[args.length - 1] || ''
-      const soundcloudAutoplay = args?.includes('--autoplay')
+      const url = args?._[1] || ''
+      const forceNewWindow = args.new
+      const doNotCheckUrlValidity = args.noCheck
+      const autoplay = args.autoplay
 
       // validate input: must be a valid youtube url or a direct video id
       if (
         !doNotCheckUrlValidity &&
-        !isValidSoundcloudUrl(soundcloudUrl) &&
-        !/^[a-zA-Z0-9_-]{11}$/.test(soundcloudUrl)
+        !isValidSoundcloudUrl(url) &&
+        !/^[a-zA-Z0-9_-]{11}$/.test(url)
       ) {
         return {
           message: 'SoundCloud URL or ID is not valid',
@@ -50,8 +50,8 @@ export default {
 
       if (existingWindow) {
         // update metadata of existing window
-        existingWindow.meta.url = soundcloudUrl
-        existingWindow.meta.autoplay = soundcloudAutoplay
+        existingWindow.meta.url = url
+        existingWindow.meta.autoplay = url
 
         existingWindow.unminimize()
         existingWindow.focus()
@@ -60,8 +60,8 @@ export default {
 
       // open a new window if no reusable one exists or --new was passed
       app.openWindow('main', undefined, {
-        url: soundcloudUrl,
-        autoplay: soundcloudAutoplay,
+        url,
+        autoplay,
       })
     },
   },
