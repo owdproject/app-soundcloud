@@ -15,7 +15,7 @@ function onYoutubePlayClick() {
 </script>
 
 <template>
-  <WindowIframe
+  <DesktopWindowIframe
     width="560"
     height="171"
     :src="`https://w.soundcloud.com/player/?url=${props.window.meta.url}&auto_play=${props.window.meta.autoplay}`"
@@ -27,5 +27,5 @@ function onYoutubePlayClick() {
         <Icon name="mdi:play" />
       </ButtonWindowNav>
     </template>
-  </WindowIframe>
+  </DesktopWindowIframe>
 </template>
