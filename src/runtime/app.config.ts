@@ -5,17 +5,24 @@ export default {
   title: 'SoundCloud',
   singleton: true,
   icon: 'simple-icons:soundcloud',
+  recommendedStreams: [
+    { url: 'https://soundcloud.com/chillhopmusic/chillhop-essentials-summer-2023', title: 'Chillhop Essentials Summer' },
+    { url: 'https://soundcloud.com/lofigirl/sets/lofi-hip-hop-radio-beats-to', title: 'Lofi Hip Hop Radio Playlist' }
+  ],
   windows: {
     main: {
       component: () => import('./components/Window/WindowSoundcloud.vue'),
-      resizable: false,
+      resizable: true,
       size: {
-        width: 'auto',
+        width: 600,
         height: 'auto',
+        minWidth: 400,
+        minHeight: 280,
+        maxHeight: 520,
       },
       position: {
-        x: 400,
-        y: 240,
+        x: 350,
+        y: 180,
         z: 0,
       },
     },
@@ -44,8 +51,9 @@ export default {
       const doNotCheckUrlValidity = args.noCheck
       const autoplay = args.autoplay
 
-      // validate input: must be a valid youtube url or a direct video id
+      // validate input: must be a valid soundcloud url
       if (
+        url &&
         !doNotCheckUrlValidity &&
         !isValidSoundcloudUrl(url) &&
         !/^[a-zA-Z0-9_-]{11}$/.test(url)

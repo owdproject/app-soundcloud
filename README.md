@@ -29,6 +29,24 @@ soundcloud <track-url> --autoplay
 soundcloud <track-url> --no-check
 ```
 
+## Configuration
+
+You can customize the list of recommended streams displayed on the initial dashboard inside your desktop configuration (`desktop.config.ts`):
+
+```ts
+import { defineDesktopConfig } from '@owdproject/core'
+
+export default defineDesktopConfig({
+  // ...
+  'org.owdproject.soundcloud': {
+    recommendedStreams: [
+      { url: 'https://soundcloud.com/chillhopmusic/chillhop-essentials-summer-2023', title: 'Chillhop Essentials Summer' },
+      { url: 'https://soundcloud.com/lofigirl/sets/lofi-hip-hop-radio-beats-to', title: 'Lofi Hip Hop Radio Playlist' }
+    ]
+  }
+})
+```
+
 ## License
 
 The application is released under the [MIT License](LICENSE).
