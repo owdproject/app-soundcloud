@@ -1,70 +1,152 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { isValidSoundcloudUrl } from '../../utils/utilSoundcloud'
+import { formatWatchedAt, normalizeLegacyDate } from '../../utils/utilFormat'
+import { useRotatingGallery } from '../../composables/useRotatingGallery'
+import FeaturedGallery from '../FeaturedGallery/FeaturedGallery.vue'
 
 import { useRuntimeConfig } from '#imports'
+
+interface StreamItem {
+  url: string
+  title: string
+  thumbnail?: string
+}
+
+interface HistoryItem {
+  url: string
+  title: string
+  watchedAt: number
+}
+
+const DEFAULT_STREAMS: StreamItem[] = [
+  { url: 'https://soundcloud.com/chillhopmusic/chillhop-essentials-summer-2023', title: 'Chillhop Essentials Summer' },
+  { url: 'https://soundcloud.com/lofigirl/sets/lofi-hip-hop-radio-beats-to', title: 'Lofi Hip Hop Radio Playlist' },
+  { url: 'https://soundcloud.com/chillhopdotcom/chillhop-raw-cut', title: 'Chillhop Raw Cut' },
+  { url: 'https://soundcloud.com/steezyasfuck/sets/chill', title: 'Chill Vibes Playlist' },
+  { url: 'https://soundcloud.com/ambientsoundscapes/sets/deep-focus', title: 'Deep Focus Ambient' },
+  { url: 'https://soundcloud.com/insomniacore/sets/lofi-beats', title: 'Lofi Beats to Relax' },
+]
 
 const props = defineProps<{
   window: IWindowController
 }>()
 
 const runtimeConfig = useRuntimeConfig()
-const soundcloudConfig = runtimeConfig.public.desktop?.['org.owdproject.soundcloud'] || {}
-const inputUrl = ref('')
-const history = ref<{ url: string; title: string; date: string }[]>([])
-const favorites = ref<{ url: string; title: string }[]>(
-  soundcloudConfig.recommendedStreams || [
-    { url: 'https://soundcloud.com/chillhopmusic/chillhop-essentials-summer-2023', title: 'Chillhop Essentials Summer' },
-    { url: 'https://soundcloud.com/lofigirl/sets/lofi-hip-hop-radio-beats-to', title: 'Lofi Hip Hop Radio Playlist' }
-  ]
+const soundcloudConfig = computed(
+  () => runtimeConfig.public.desktop?.['org.owdproject.soundcloud'] || {},
 )
-// showPlayer is derived per-window from meta — no global state
+const inputUrl = ref('')
+const history = ref<HistoryItem[]>([])
+const thumbnailByUrl = ref<Record<string, string>>({})
+
+const featuredPool = computed(() => soundcloudConfig.value.recommendedStreams || DEFAULT_STREAMS)
+const rotateIntervalMs = computed(() => soundcloudConfig.value.galleryRotateIntervalMs ?? 8000)
+
+const { slots: gallerySlots } = useRotatingGallery(featuredPool, {
+  intervalMs: rotateIntervalMs,
+  getKey: item => item.url,
+  getThumbnail: item => item.thumbnail || thumbnailByUrl.value[item.url],
+})
+
+const galleryTiles = computed(() =>
+  gallerySlots.value.map(slot => ({
+    key: slot.key,
+    title: slot.item.title,
+    thumbnail: slot.item.thumbnail || thumbnailByUrl.value[slot.item.url],
+  })),
+)
+
 const showPlayer = computed(() => !!(props.window.meta.url))
+
+async function resolveThumbnail(url: string, preset?: string) {
+  if (preset) {
+    thumbnailByUrl.value[url] = preset
+    return
+  }
+  if (thumbnailByUrl.value[url]) return
+
+  try {
+    const response = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(url)}`)
+    if (response.ok) {
+      const data = await response.json()
+      if (data?.thumbnail_url) {
+        thumbnailByUrl.value[url] = data.thumbnail_url
+      }
+    }
+  } catch (e) {
+    console.error('Failed to fetch SoundCloud thumbnail:', e)
+  }
+}
+
+watch(
+  featuredPool,
+  (streams) => {
+    for (const stream of streams) {
+      resolveThumbnail(stream.url, stream.thumbnail)
+    }
+  },
+  { immediate: true, deep: true },
+)
+
+watch(
+  gallerySlots,
+  (slots) => {
+    for (const slot of slots) {
+      resolveThumbnail(slot.item.url, slot.item.thumbnail)
+    }
+  },
+  { deep: true },
+)
 
 onMounted(() => {
   const stored = localStorage.getItem('owd_soundcloud_history')
-  if (stored) {
-    try {
-      history.value = JSON.parse(stored)
-    } catch (e) {
-      history.value = []
-    }
+  if (!stored) return
+
+  try {
+    const parsed = JSON.parse(stored) as Array<HistoryItem & { date?: string }>
+    history.value = parsed.map((item) => ({
+      url: item.url,
+      title: item.title,
+      watchedAt: item.watchedAt ?? normalizeLegacyDate(item.date) ?? Date.now(),
+    }))
+  } catch {
+    history.value = []
   }
 })
 
+function persistHistory() {
+  localStorage.setItem('owd_soundcloud_history', JSON.stringify(history.value))
+}
+
 function saveToHistory(url: string, title: string) {
   history.value = history.value.filter(item => item.url !== url)
-  const now = new Date()
-  const dateStr = now.toLocaleDateString()
-  const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  
-  // Try to generate a clean title from the SoundCloud URL path
+
   let trackTitle = title
   if (!trackTitle || trackTitle.startsWith('SoundCloud')) {
     try {
       const parts = new URL(url).pathname.split('/').filter(Boolean)
       if (parts.length >= 2) {
-        // user/track-name -> Track Name (prettified)
         trackTitle = parts[parts.length - 1]
           .replace(/[-_]/g, ' ')
           .replace(/\b\w/g, c => c.toUpperCase())
       } else if (parts.length === 1) {
         trackTitle = parts[0].replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
       }
-    } catch (e) {
+    } catch {
       trackTitle = 'SoundCloud Track'
     }
   }
 
   history.value.unshift({
     url,
-    title: trackTitle || `SoundCloud Track`,
-    date: `${dateStr} alle ${timeStr}`
+    title: trackTitle || 'SoundCloud Track',
+    watchedAt: Date.now(),
   })
-  if (history.value.length > 10) {
+  if (history.value.length > 12) {
     history.value.pop()
   }
-  localStorage.setItem('owd_soundcloud_history', JSON.stringify(history.value))
+  persistHistory()
 }
 
 function clearHistory() {
@@ -77,7 +159,7 @@ async function fetchSoundcloudTitle(url: string): Promise<string | null> {
     const response = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(url)}`)
     if (response.ok) {
       const data = await response.json()
-      if (data && data.title) {
+      if (data?.title) {
         return data.title
       }
     }
@@ -91,7 +173,6 @@ function playTrack(url: string, title?: string) {
   if (isValidSoundcloudUrl(url)) {
     props.window.meta.url = url
     props.window.meta.autoplay = true
-    // showPlayer updates automatically via computed
     saveToHistory(url, title || '')
 
     if (!title) {
@@ -102,6 +183,17 @@ function playTrack(url: string, title?: string) {
       })
     }
   }
+}
+
+function playGalleryTile(index: number) {
+  const slot = gallerySlots.value[index]
+  if (slot) {
+    playTrack(slot.item.url, slot.item.title)
+  }
+}
+
+function playFeatured(item: StreamItem) {
+  playTrack(item.url, item.title)
 }
 
 function handleInputSubmit() {
@@ -118,7 +210,10 @@ function handleInputSubmit() {
 function closeTrack() {
   props.window.meta.url = ''
   props.window.meta.autoplay = false
-  // showPlayer updates automatically via computed
+}
+
+function thumbFor(url: string, custom?: string) {
+  return custom || thumbnailByUrl.value[url]
 }
 </script>
 
@@ -128,7 +223,7 @@ function closeTrack() {
       <DesktopWindowNavButton
         v-if="showPlayer"
         rounded
-        title="Back to Dashboard"
+        title="Back to home"
         @click="closeTrack"
       >
         <Icon name="mdi:arrow-left" />
@@ -136,10 +231,8 @@ function closeTrack() {
     </template>
 
     <div class="soundcloud-app">
-      <!-- Splash Loading Component -->
       <DesktopCoreSplash icon="simple-icons:soundcloud" title="SoundCloud Client" />
 
-      <!-- Player View (persistent via v-show to keep iframe running in background) -->
       <div v-show="showPlayer && props.window.meta.url" class="soundcloud-player">
         <div class="soundcloud-player__frame-container">
           <iframe
@@ -154,70 +247,109 @@ function closeTrack() {
         </div>
       </div>
 
-      <!-- Initial Dashboard View -->
-      <div v-show="!showPlayer" class="soundcloud-dashboard">
-        <div class="soundcloud-dashboard__hero">
-          <Icon name="simple-icons:soundcloud" class="soundcloud-dashboard__logo" />
-          <h2 class="soundcloud-dashboard__title">SoundCloud Player</h2>
-          <p class="soundcloud-dashboard__subtitle">Stream music and playlists directly</p>
-        </div>
-
-        <form class="soundcloud-dashboard__form" @submit.prevent="handleInputSubmit">
-          <InputText
-            v-model="inputUrl"
-            placeholder="Paste SoundCloud Track or Playlist URL here..."
-            autocomplete="off"
-            spellcheck="false"
-          />
-          <Button type="submit">Play Music</Button>
-        </form>
-
-        <div class="soundcloud-dashboard__content">
-          <!-- Favorites -->
-          <div class="soundcloud-dashboard__section">
-            <h4 class="soundcloud-dashboard__section-title">
-              Recommended Streams
-            </h4>
-            <div class="soundcloud-dashboard__list">
-              <div
-                v-for="fav in favorites"
-                :key="fav.url"
-                class="soundcloud-dashboard__card"
-                @click="playTrack(fav.url, fav.title)"
-              >
-                <div class="soundcloud-dashboard__card-info">
-                  <span class="soundcloud-dashboard__card-title">{{ fav.title }}</span>
-                </div>
-              </div>
-            </div>
+      <div v-show="!showPlayer" class="soundcloud-home">
+        <header class="soundcloud-home__toolbar">
+          <div class="soundcloud-home__brand">
+            <Icon name="simple-icons:soundcloud" class="soundcloud-home__logo" />
+            <span class="soundcloud-home__wordmark">SoundCloud</span>
           </div>
 
-          <!-- History -->
-          <div class="soundcloud-dashboard__section">
-            <div class="soundcloud-dashboard__section-header">
-              <h4 class="soundcloud-dashboard__section-title">
-                Recent Tracks
-              </h4>
-              <a v-if="history.length > 0" class="soundcloud-dashboard__clear-btn" @click="clearHistory">Clear</a>
+          <form class="soundcloud-home__search" @submit.prevent="handleInputSubmit">
+            <InputText
+              v-model="inputUrl"
+              placeholder="Paste a track or playlist URL..."
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <Button type="submit" severity="warn" aria-label="Play">
+              <Icon name="mdi:play" />
+            </Button>
+          </form>
+        </header>
+
+        <div class="soundcloud-home__body">
+          <aside class="soundcloud-home__featured">
+            <h3 class="soundcloud-home__heading">
+              <Icon name="mdi:television-play" />
+              Featured
+            </h3>
+            <FeaturedGallery
+              v-if="galleryTiles.length"
+              fill
+              :tiles="galleryTiles"
+              brand-icon="simple-icons:soundcloud"
+              @play="playGalleryTile"
+            />
+          </aside>
+
+          <main class="soundcloud-home__feed">
+            <div class="soundcloud-home__feed-header">
+              <h3 class="soundcloud-home__heading">
+                <Icon :name="history.length ? 'mdi:history' : 'mdi:compass-outline'" />
+                {{ history.length ? 'Listening history' : 'Recommended for you' }}
+              </h3>
+              <button
+                v-if="history.length"
+                type="button"
+                class="soundcloud-home__clear"
+                @click="clearHistory"
+              >
+                Clear all
+              </button>
             </div>
-            
-            <div v-if="history.length === 0" class="soundcloud-dashboard__empty">
-              No recently played tracks
-            </div>
-            <div v-else class="soundcloud-dashboard__list">
-              <div
+
+            <div v-if="history.length" class="soundcloud-home__list">
+              <article
                 v-for="item in history"
                 :key="item.url"
-                class="soundcloud-dashboard__card"
+                class="track-row"
                 @click="playTrack(item.url, item.title)"
               >
-                <div class="soundcloud-dashboard__card-info">
-                  <span class="soundcloud-dashboard__card-title">{{ item.title }}</span>
-                  <span class="soundcloud-dashboard__card-meta">Played: {{ item.date }}</span>
+                <div class="track-row__thumb">
+                  <img
+                    v-if="thumbFor(item.url)"
+                    :src="thumbFor(item.url)"
+                    :alt="item.title"
+                    loading="lazy"
+                  >
+                  <div v-else class="track-row__thumb-fallback">
+                    <Icon name="simple-icons:soundcloud" />
+                  </div>
+                  <Icon name="mdi:play-circle" class="track-row__play" />
                 </div>
-              </div>
+                <div class="track-row__info">
+                  <h4 class="track-row__title">{{ item.title }}</h4>
+                  <p class="track-row__meta">Played {{ formatWatchedAt(item.watchedAt) }}</p>
+                </div>
+              </article>
             </div>
-          </div>
+
+            <div v-else class="soundcloud-home__list">
+              <article
+                v-for="item in featuredPool"
+                :key="item.url"
+                class="track-row"
+                @click="playFeatured(item)"
+              >
+                <div class="track-row__thumb">
+                  <img
+                    v-if="thumbFor(item.url, item.thumbnail)"
+                    :src="thumbFor(item.url, item.thumbnail)"
+                    :alt="item.title"
+                    loading="lazy"
+                  >
+                  <div v-else class="track-row__thumb-fallback">
+                    <Icon name="simple-icons:soundcloud" />
+                  </div>
+                  <Icon name="mdi:play-circle" class="track-row__play" />
+                </div>
+                <div class="track-row__info">
+                  <h4 class="track-row__title">{{ item.title }}</h4>
+                  <p class="track-row__meta">Featured stream</p>
+                </div>
+              </article>
+            </div>
+          </main>
         </div>
       </div>
     </div>
@@ -230,12 +362,10 @@ function closeTrack() {
   flex-direction: column;
   height: 100%;
   width: 100%;
-  background: var(--paper-bg, #ececee);
-  color: var(--paper-text, #2c2c30);
-  font-family: var(--paper-font, sans-serif);
+  color: inherit;
+  background: transparent;
 }
 
-// Player Styles
 .soundcloud-player {
   display: flex;
   flex-direction: column;
@@ -254,152 +384,214 @@ function closeTrack() {
   }
 }
 
-// Dashboard Styles
-.soundcloud-dashboard {
+.soundcloud-home {
   flex: 1;
-  overflow-y: auto;
-  padding: 24px;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  overflow: hidden;
 
-  &__hero {
+  &__toolbar {
+    flex-shrink: 0;
     display: flex;
-    flex-direction: column;
     align-items: center;
-    text-align: center;
-    margin-bottom: 8px;
+    gap: 16px;
+    padding: 12px 16px;
+    border-bottom: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+  }
+
+  &__brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
   }
 
   &__logo {
-    font-size: 48px;
+    font-size: 26px;
     color: #ff5500;
-    margin-bottom: 8px;
   }
 
-  &__title {
-    font-size: 20px;
+  &__wordmark {
+    font-size: 1.125rem;
     font-weight: 700;
-    margin: 0;
+    letter-spacing: -0.02em;
   }
 
-  &__subtitle {
-    font-size: 13px;
-    color: var(--paper-text-secondary, #68686f);
-    margin: 4px 0 0 0;
-  }
-
-  &__form {
+  &__search {
+    flex: 1;
     display: flex;
     gap: 8px;
-    width: 100%;
+    min-width: 0;
 
     :deep(.p-inputtext) {
       flex: 1;
+      border-radius: 999px;
+      padding-left: 16px;
+    }
+
+    :deep(.p-button) {
+      border-radius: 999px;
+      width: 40px;
+      padding: 0;
+      flex-shrink: 0;
     }
   }
 
-  &__content {
+  &__body {
+    flex: 1;
+    min-height: 0;
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
-
-    @media (max-width: 600px) {
-      grid-template-columns: 1fr;
-    }
+    grid-template-columns: 1fr 2fr;
+    gap: 0;
   }
 
-  &__section {
+  &__featured {
+    min-height: 0;
+    min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    padding: 14px 12px 14px 16px;
+    border-right: 1px solid color-mix(in srgb, currentColor 10%, transparent);
   }
 
-  &__section-header {
+  &__feed {
+    min-height: 0;
+    min-width: 0;
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
+    padding: 14px 16px 14px 12px;
+    overflow: hidden;
   }
 
-  &__section-title {
-    font-size: 14px;
-    font-weight: 600;
-    margin: 0;
+  &__feed-header {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+
+  &__heading {
     display: flex;
     align-items: center;
     gap: 6px;
-    color: var(--paper-text, #2c2c30);
+    margin: 0 0 10px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+
+    .soundcloud-home__feed-header & {
+      margin-bottom: 0;
+    }
   }
 
-  &__clear-btn {
+  &__clear {
+    padding: 0;
+    border: 0;
+    background: none;
     font-size: 12px;
-    color: var(--paper-accent, #3b6fd4);
+    color: inherit;
+    opacity: 0.55;
     cursor: pointer;
-    text-decoration: none;
 
     &:hover {
+      opacity: 0.9;
       text-decoration: underline;
     }
   }
 
-  &__empty {
-    font-size: 13px;
-    color: var(--paper-text-tertiary, #98989f);
-    padding: 16px;
-    text-align: center;
-    border: 1px dashed var(--paper-border, #d1d1d6);
-    border-radius: var(--paper-radius, 6px);
-    background: var(--paper-surface, #f4f4f6);
-  }
-
   &__list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 4px;
+    padding-right: 2px;
   }
+}
 
-  &__card {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 12px;
-    background: var(--paper-surface, #f4f4f6);
-    border: 1px solid var(--paper-border, #d1d1d6);
-    border-radius: var(--paper-radius, 6px);
-    cursor: pointer;
-    transition: all 0.15s ease-in-out;
+.track-row {
+  display: flex;
+  gap: 12px;
+  padding: 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s ease;
 
-    &:hover {
-      background: color-mix(in srgb, var(--paper-surface) 95%, var(--paper-text));
-      border-color: color-mix(in srgb, var(--paper-border) 70%, var(--paper-text));
+  &:hover {
+    background: color-mix(in srgb, currentColor 7%, transparent);
+
+    .track-row__play {
+      opacity: 1;
     }
   }
 
-  &__card-icon {
-    font-size: 20px;
-    color: var(--paper-accent, #3b6fd4);
+  &__thumb {
+    position: relative;
+    flex-shrink: 0;
+    width: 72px;
+    height: 72px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: color-mix(in srgb, currentColor 10%, transparent);
+
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+  }
+
+  &__thumb-fallback {
     display: flex;
     align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    font-size: 28px;
+    opacity: 0.35;
   }
 
-  &__card-info {
+  &__play {
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    width: 36px;
+    height: 36px;
+    font-size: 36px;
+    color: #fff;
+    opacity: 0;
+    filter: drop-shadow(0 2px 6px rgb(0 0 0 / 55%));
+    transition: opacity 0.15s ease;
+    pointer-events: none;
+  }
+
+  &__info {
+    min-width: 0;
     display: flex;
     flex-direction: column;
-    min-width: 0; // enables truncation
+    justify-content: center;
+    gap: 4px;
   }
 
-  &__card-title {
+  &__title {
+    margin: 0;
     font-size: 13px;
     font-weight: 500;
-    white-space: nowrap;
+    line-height: 1.35;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
   }
 
-  &__card-meta {
+  &__meta {
+    margin: 0;
     font-size: 11px;
-    color: var(--paper-text-tertiary, #98989f);
-    margin-top: 2px;
+    opacity: 0.5;
   }
 }
 </style>

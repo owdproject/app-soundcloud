@@ -10,7 +10,7 @@
   "dependencies": {
     "@owdproject/core": "workspace:*",
     "@owdproject/app-soundcloud": "workspace:*",
-    "nuxt": "^4.4.4",
+    "nuxt": "^4.4.6",
     "@owdproject/theme-nova": "workspace:*"
   }
 }
