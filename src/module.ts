@@ -9,21 +9,29 @@ import { registerTailwindPath } from '@owdproject/kit-tailwind/kit/registerTailw
 export default defineNuxtModule({
   meta: {
     name: 'desktop-app-soundcloud',
+    configKey: 'soundcloud',
+  },
+  defaults: {
+    galleryRotateIntervalMs: 8000,
+    recommendedStreams: [
+      { url: 'https://soundcloud.com/chillhopmusic/chillhop-essentials-summer-2023', title: 'Chillhop Essentials Summer' },
+      { url: 'https://soundcloud.com/lofigirl/sets/lofi-hip-hop-radio-beats-to', title: 'Lofi Hip Hop Radio' },
+      { url: 'https://soundcloud.com/steezyasfuck/sets/chill', title: 'Chill Vibes' },
+      { url: 'https://soundcloud.com/ambientsoundscapes/sets/deep-focus', title: 'Deep Focus Ambient' },
+      { url: 'https://soundcloud.com/chillhopdotcom/chillhop-raw-cut', title: 'Chillhop Raw Cut' },
+    ],
   },
   async setup(options, nuxt) {
     const { resolve } = createResolver(import.meta.url)
 
-    // add components
+    nuxt.options.runtimeConfig.public.desktop ??= {}
+    nuxt.options.runtimeConfig.public.desktop.soundcloud = options
 
     addComponentsDir({
       path: resolve('./runtime/components'),
     })
 
-    // add plugins
-
     addPlugin(resolve('./runtime/plugin'))
-
-    // configure tailwind
 
     registerTailwindPath(
       nuxt,

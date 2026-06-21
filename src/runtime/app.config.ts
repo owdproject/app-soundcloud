@@ -5,14 +5,6 @@ export default {
   title: 'SoundCloud',
   singleton: true,
   icon: 'simple-icons:soundcloud',
-  recommendedStreams: [
-    { url: 'https://soundcloud.com/chillhopmusic/chillhop-essentials-summer-2023', title: 'Chillhop Essentials Summer' },
-    { url: 'https://soundcloud.com/lofigirl/sets/lofi-hip-hop-radio-beats-to', title: 'Lofi Hip Hop Radio Playlist' },
-    { url: 'https://soundcloud.com/chillhopdotcom/chillhop-raw-cut', title: 'Chillhop Raw Cut' },
-    { url: 'https://soundcloud.com/steezyasfuck/sets/chill', title: 'Chill Vibes Playlist' },
-    { url: 'https://soundcloud.com/ambientsoundscapes/sets/deep-focus', title: 'Deep Focus Ambient' },
-    { url: 'https://soundcloud.com/insomniacore/sets/lofi-beats', title: 'Lofi Beats to Relax' },
-  ],
   windows: {
     main: {
       component: () => import('./components/Window/WindowSoundcloud.vue'),

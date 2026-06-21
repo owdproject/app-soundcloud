@@ -19,28 +19,20 @@ interface HistoryItem {
   watchedAt: number
 }
 
-const DEFAULT_STREAMS: StreamItem[] = [
-  { url: 'https://soundcloud.com/chillhopmusic/chillhop-essentials-summer-2023', title: 'Chillhop Essentials Summer' },
-  { url: 'https://soundcloud.com/lofigirl/sets/lofi-hip-hop-radio-beats-to', title: 'Lofi Hip Hop Radio Playlist' },
-  { url: 'https://soundcloud.com/chillhopdotcom/chillhop-raw-cut', title: 'Chillhop Raw Cut' },
-  { url: 'https://soundcloud.com/steezyasfuck/sets/chill', title: 'Chill Vibes Playlist' },
-  { url: 'https://soundcloud.com/ambientsoundscapes/sets/deep-focus', title: 'Deep Focus Ambient' },
-  { url: 'https://soundcloud.com/insomniacore/sets/lofi-beats', title: 'Lofi Beats to Relax' },
-]
-
 const props = defineProps<{
   window: IWindowController
 }>()
 
 const runtimeConfig = useRuntimeConfig()
 const soundcloudConfig = computed(
-  () => runtimeConfig.public.desktop?.['org.owdproject.soundcloud'] || {},
+  () => runtimeConfig.public.desktop?.soundcloud || {},
 )
 const inputUrl = ref('')
+const inputError = ref('')
 const history = ref<HistoryItem[]>([])
 const thumbnailByUrl = ref<Record<string, string>>({})
 
-const featuredPool = computed(() => soundcloudConfig.value.recommendedStreams || DEFAULT_STREAMS)
+const featuredPool = computed(() => soundcloudConfig.value.recommendedStreams ?? [])
 const rotateIntervalMs = computed(() => soundcloudConfig.value.galleryRotateIntervalMs ?? 8000)
 
 const { slots: gallerySlots } = useRotatingGallery(featuredPool, {
@@ -98,6 +90,12 @@ watch(
   },
   { deep: true },
 )
+
+watch(inputUrl, () => {
+  if (inputError.value) {
+    inputError.value = ''
+  }
+})
 
 onMounted(() => {
   const stored = localStorage.getItem('owd_soundcloud_history')
@@ -200,10 +198,11 @@ function handleInputSubmit() {
   const value = inputUrl.value.trim()
   if (!value) return
   if (isValidSoundcloudUrl(value)) {
+    inputError.value = ''
     playTrack(value)
     inputUrl.value = ''
   } else {
-    alert('Please enter a valid SoundCloud track or playlist URL.')
+    inputError.value = 'Enter a valid SoundCloud track or playlist URL.'
   }
 }
 
@@ -254,17 +253,37 @@ function thumbFor(url: string, custom?: string) {
             <span class="soundcloud-home__wordmark">SoundCloud</span>
           </div>
 
-          <form class="soundcloud-home__search" @submit.prevent="handleInputSubmit">
-            <InputText
-              v-model="inputUrl"
-              placeholder="Paste a track or playlist URL..."
-              autocomplete="off"
-              spellcheck="false"
-            />
-            <Button type="submit" severity="warn" aria-label="Play">
-              <Icon name="mdi:play" />
-            </Button>
-          </form>
+          <div class="soundcloud-home__search-field">
+            <form class="soundcloud-home__search" @submit.prevent="handleInputSubmit">
+              <InputText
+                v-model="inputUrl"
+                placeholder="Paste a track or playlist URL..."
+                autocomplete="off"
+                spellcheck="false"
+                :invalid="!!inputError"
+                aria-describedby="soundcloud-search-error"
+              />
+              <Button type="submit" severity="warn" aria-label="Search" class="soundcloud-home__search-btn">
+                <Icon name="mdi:magnify" size="22" />
+              </Button>
+            </form>
+
+            <Transition name="soundcloud-search-error">
+              <Message
+                v-if="inputError"
+                id="soundcloud-search-error"
+                severity="error"
+                variant="simple"
+                size="small"
+                closable
+                class="soundcloud-home__search-error"
+                role="alert"
+                @close="inputError = ''"
+              >
+                {{ inputError }}
+              </Message>
+            </Transition>
+          </div>
         </header>
 
         <div class="soundcloud-home__body">
@@ -397,7 +416,6 @@ function thumbFor(url: string, custom?: string) {
     align-items: center;
     gap: 16px;
     padding: 12px 16px;
-    border-bottom: 1px solid color-mix(in srgb, currentColor 10%, transparent);
   }
 
   &__brand {
@@ -418,6 +436,14 @@ function thumbFor(url: string, custom?: string) {
     letter-spacing: -0.02em;
   }
 
+  &__search-field {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
   &__search {
     flex: 1;
     display: flex;
@@ -430,11 +456,28 @@ function thumbFor(url: string, custom?: string) {
       padding-left: 16px;
     }
 
-    :deep(.p-button) {
+    :deep(.soundcloud-home__search-btn) {
       border-radius: 999px;
-      width: 40px;
+      width: 32px;
+      min-width: 32px;
+      height: 32px;
       padding: 0;
       flex-shrink: 0;
+    }
+  }
+
+  &__search-error {
+    margin: 0;
+    width: 100%;
+
+    :deep(.p-message) {
+      margin: 0;
+      width: 100%;
+    }
+
+    :deep(.p-message-text) {
+      font-size: 12px;
+      line-height: 1.35;
     }
   }
 
@@ -452,7 +495,6 @@ function thumbFor(url: string, custom?: string) {
     display: flex;
     flex-direction: column;
     padding: 14px 12px 14px 16px;
-    border-right: 1px solid color-mix(in srgb, currentColor 10%, transparent);
   }
 
   &__feed {
@@ -512,6 +554,17 @@ function thumbFor(url: string, custom?: string) {
   }
 }
 
+.soundcloud-search-error-enter-active,
+.soundcloud-search-error-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.soundcloud-search-error-enter-from,
+.soundcloud-search-error-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
 .track-row {
   display: flex;
   gap: 12px;
@@ -531,8 +584,8 @@ function thumbFor(url: string, custom?: string) {
   &__thumb {
     position: relative;
     flex-shrink: 0;
-    width: 72px;
-    height: 72px;
+    width: 128px;
+    aspect-ratio: 16 / 9;
     border-radius: 8px;
     overflow: hidden;
     background: color-mix(in srgb, currentColor 10%, transparent);
@@ -559,9 +612,9 @@ function thumbFor(url: string, custom?: string) {
     position: absolute;
     inset: 0;
     margin: auto;
-    width: 36px;
-    height: 36px;
-    font-size: 36px;
+    width: 28px;
+    height: 28px;
+    font-size: 28px;
     color: #fff;
     opacity: 0;
     filter: drop-shadow(0 2px 6px rgb(0 0 0 / 55%));

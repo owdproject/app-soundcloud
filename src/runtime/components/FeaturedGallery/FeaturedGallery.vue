@@ -76,12 +76,6 @@ const emit = defineEmits<{
     min-width: 0;
     min-height: 0;
     color: inherit;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
-
-    &:hover {
-      transform: scale(1.015);
-      box-shadow: 0 4px 16px color-mix(in srgb, currentColor 18%, transparent);
-    }
 
     &:focus-visible {
       outline: 2px solid color-mix(in srgb, currentColor 45%, transparent);

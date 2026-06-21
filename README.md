@@ -42,11 +42,11 @@ export default defineDesktopConfig({
   apps: [
     '@owdproject/app-soundcloud'
   ],
-  'org.owdproject.soundcloud': {
+  soundcloud: {
     galleryRotateIntervalMs: 8000,
     recommendedStreams: [
       { url: 'https://soundcloud.com/chillhopmusic/chillhop-essentials-summer-2023', title: 'Chillhop Essentials Summer' },
-      { url: 'https://soundcloud.com/lofigirl/sets/lofi-hip-hop-radio-beats-to', title: 'Lofi Hip Hop Radio Playlist' },
+      { url: 'https://soundcloud.com/lofigirl/sets/lofi-hip-hop-radio-beats-to', title: 'Lofi Hip Hop Radio' },
     ]
   }
 })
