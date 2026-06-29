@@ -34,9 +34,6 @@
   "files": [
     "dist"
   ],
-  "nx": {
-    "name": "app-soundcloud"
-  },
   "scripts": {
     "prepack": "nuxt-module-build build",
     "dev": "pnpm run dev:prepare && cd playground && pnpm exec nuxt dev",
